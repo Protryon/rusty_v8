@@ -14,6 +14,7 @@ use crate::ToLocal;
 use crate::Value;
 use std::ffi::c_void;
 use std::ptr::NonNull;
+use std::convert::TryInto;
 
 extern "C" {
   fn v8__Object__New(isolate: *mut Isolate) -> *mut Object;
@@ -92,6 +93,8 @@ extern "C" {
     index: int,
   ) -> NonNull<Value>;
   fn v8__Object__InternalFieldCount(object: &Object) -> int;
+  fn v8__Object__GetOwnPropertyNames(object: &Object, context: Local<Context>) -> *mut Value;
+  fn v8__Object__GetPropertyNames(object: &Object, context: Local<Context>) -> *mut Value;
 
   fn v8__Array__New(isolate: *mut Isolate, length: int) -> *mut Array;
   fn v8__Array__New_with_elements(
@@ -310,6 +313,27 @@ impl Object {
   /// Gets the number of internal fields for this Object.
   pub fn internal_field_count(&self) -> i32 {
     unsafe { v8__Object__InternalFieldCount(self) }
+  }
+
+  fn resolve_js_array<'sc>(&self, scope: &mut impl ToLocal<'sc>, context: Local<Context>, raw_name_ptr: *mut Value) -> Option<Vec<String>> {
+    let raw_names: Local<Array> = unsafe { scope.to_local(raw_name_ptr) }?.try_into().ok()?;
+    let mut names: Vec<String> = vec![];
+    for i in 0..raw_names.length() {
+      let local = raw_names.get_index(scope, context, i)?;
+      let local: Local<crate::String> = local.try_into().ok()?;
+      names.push(local.to_rust_string_lossy(scope));
+    }
+    Some(names)
+  }
+
+  pub fn get_own_property_names<'sc>(&self, scope: &mut impl ToLocal<'sc>, context: Local<Context>) -> Option<Vec<String>> {
+    let raw_name_ptr = unsafe { v8__Object__GetOwnPropertyNames(self, context) };
+    self.resolve_js_array(scope, context, raw_name_ptr)
+  }
+
+  pub fn get_property_names<'sc>(&self, scope: &mut impl ToLocal<'sc>, context: Local<Context>) -> Option<Vec<String>> {
+    let raw_name_ptr = unsafe { v8__Object__GetPropertyNames(self, context) };
+    self.resolve_js_array(scope, context, raw_name_ptr)
   }
 }
 
