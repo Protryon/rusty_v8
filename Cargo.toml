@@ -1,6 +1,6 @@
 [package]
 name = "rusty_v8_protryon"
-version = "0.3.10"
+version = "3.10.1"
 description = "Rust bindings to V8"
 readme = "README.md"
 authors = ["the Deno authors"]
