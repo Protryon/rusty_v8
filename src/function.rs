@@ -240,8 +240,9 @@ pub type FunctionCallback = extern "C" fn(*const FunctionCallbackInfo);
 
 impl<F> MapFnFrom<F> for FunctionCallback
 where
+  for<'sc>
   F: UnitType
-    + Fn(FunctionCallbackScope, FunctionCallbackArguments, ReturnValue),
+    + Fn(FunctionCallbackScope<'sc>, FunctionCallbackArguments<'sc>, ReturnValue<'sc>),
 {
   fn mapping() -> Self {
     let f = |info: *const FunctionCallbackInfo| {

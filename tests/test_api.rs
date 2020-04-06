@@ -1370,6 +1370,18 @@ fn data_is_true_callback(
   assert!(data.is_true());
 }
 
+fn fn_callback_lifetimes_proxy<'sc>(scope: &mut impl v8::ToLocal<'sc>) -> v8::Local<'sc, v8::Value> {
+  v8::String::new(scope, "Hello lifetimed callback!").unwrap().into()
+}
+
+fn fn_callback_lifetimes<'sc>(
+  scope: v8::FunctionCallbackScope<'sc>,
+  args: v8::FunctionCallbackArguments<'sc>,
+  mut rv: v8::ReturnValue<'sc>,
+) {
+  rv.set(fn_callback_lifetimes_proxy(scope));
+}
+
 #[test]
 fn function() {
   let _setup_guard = setup();
@@ -1419,6 +1431,14 @@ fn function() {
     function
       .call(scope, context, recv, &[])
       .expect("Function call failed");
+    let function = v8::Function::new(scope, context, fn_callback_lifetimes)
+      .expect("Unable to create function");
+    let value = function
+      .call(scope, context, recv, &[])
+      .expect("Function call failed");
+    let value_str: v8::Local<v8::String> = value.try_into().unwrap();
+    let value_str = value_str.to_rust_string_lossy(scope);
+    assert_eq!(value_str, "Hello lifetimed callback!");
   }
 }
 
