@@ -912,6 +912,12 @@ fn exception() {
   assert!(v8::Exception::get_stack_trace(scope, exception).is_none());
 }
 
+fn create_message_argument_lifetimes_callback<'sc>(scope: v8::FunctionCallbackScope<'sc>, args: v8::FunctionCallbackArguments<'sc>, mut rv: v8::ReturnValue<'sc>) {
+  let message = v8::Exception::create_message(scope, args.get(0));
+  let message_str = message.get(scope);
+  rv.set(message_str.into())
+}
+
 #[test]
 fn create_message_argument_lifetimes() {
   let _setup_guard = setup();
@@ -928,13 +934,7 @@ fn create_message_argument_lifetimes() {
     let create_message = v8::Function::new(
       scope,
       context,
-      |scope: v8::FunctionCallbackScope,
-       args: v8::FunctionCallbackArguments,
-       mut rv: v8::ReturnValue| {
-        let message = v8::Exception::create_message(scope, args.get(0));
-        let message_str = message.get(scope);
-        rv.set(message_str.into())
-      },
+      create_message_argument_lifetimes_callback,
     )
     .unwrap();
     let receiver = context.global(scope);
@@ -1168,6 +1168,30 @@ fn create_data_property() {
   }
 }
 
+static OBJECT_SET_ACCESSOR_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+fn object_set_accessor_callback<'sc>(scope: v8::PropertyCallbackScope<'sc>,
+  key: v8::Local<'sc, v8::Name>,
+  args: v8::PropertyCallbackArguments<'sc>,
+  mut rv: v8::ReturnValue<'sc>) {
+    let context = scope.get_current_context().unwrap();
+    let this = args.this();
+
+    let expected_key = v8::String::new(scope, "getter_key").unwrap();
+    assert!(key.strict_equals(expected_key.into()));
+
+    let int_key = v8::String::new(scope, "int_key").unwrap();
+    let int_value = this.get(scope, context, int_key.into()).unwrap();
+    let int_value = v8::Local::<v8::Integer>::try_from(int_value).unwrap();
+    assert_eq!(int_value.value(), 42);
+
+    let s = v8::String::new(scope, "hello").unwrap();
+    assert!(rv.get(scope).is_undefined());
+    rv.set(s.into());
+
+    OBJECT_SET_ACCESSOR_CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
 #[test]
 fn object_set_accessor() {
   let _setup_guard = setup();
@@ -1181,34 +1205,11 @@ fn object_set_accessor() {
   let scope = cs.enter();
 
   {
-    static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-    let getter = |scope: v8::PropertyCallbackScope,
-                  key: v8::Local<v8::Name>,
-                  args: v8::PropertyCallbackArguments,
-                  mut rv: v8::ReturnValue| {
-      let context = scope.get_current_context().unwrap();
-      let this = args.this();
-
-      let expected_key = v8::String::new(scope, "getter_key").unwrap();
-      assert!(key.strict_equals(expected_key.into()));
-
-      let int_key = v8::String::new(scope, "int_key").unwrap();
-      let int_value = this.get(scope, context, int_key.into()).unwrap();
-      let int_value = v8::Local::<v8::Integer>::try_from(int_value).unwrap();
-      assert_eq!(int_value.value(), 42);
-
-      let s = v8::String::new(scope, "hello").unwrap();
-      assert!(rv.get(scope).is_undefined());
-      rv.set(s.into());
-
-      CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-    };
 
     let mut obj = v8::Object::new(scope);
 
     let getter_key = v8::String::new(scope, "getter_key").unwrap();
-    obj.set_accessor(context, getter_key.into(), getter);
+    obj.set_accessor(context, getter_key.into(), object_set_accessor_callback);
 
     let int_key = v8::String::new(scope, "int_key").unwrap();
     obj.set(context, int_key.into(), v8::Integer::new(scope, 42).into());
@@ -1222,7 +1223,7 @@ fn object_set_accessor() {
     let expected = v8::String::new(scope, "hello").unwrap();
     assert!(actual.strict_equals(expected.into()));
 
-    assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1);
+    assert_eq!(OBJECT_SET_ACCESSOR_CALL_COUNT.load(Ordering::SeqCst), 1);
   }
 }
 
@@ -1319,10 +1320,10 @@ fn proxy() {
   }
 }
 
-fn fn_callback(
-  scope: v8::FunctionCallbackScope,
-  args: v8::FunctionCallbackArguments,
-  mut rv: v8::ReturnValue,
+fn fn_callback<'sc>(
+  scope: v8::FunctionCallbackScope<'sc>,
+  args: v8::FunctionCallbackArguments<'sc>,
+  mut rv: v8::ReturnValue<'sc>,
 ) {
   assert_eq!(args.length(), 0);
   let s = v8::String::new(scope, "Hello callback!").unwrap();
@@ -1330,10 +1331,10 @@ fn fn_callback(
   rv.set(s.into());
 }
 
-fn fn_callback2(
-  scope: v8::FunctionCallbackScope,
-  args: v8::FunctionCallbackArguments,
-  mut rv: v8::ReturnValue,
+fn fn_callback2<'sc>(
+  scope: v8::FunctionCallbackScope<'sc>,
+  args: v8::FunctionCallbackArguments<'sc>,
+  mut rv: v8::ReturnValue<'sc>,
 ) {
   assert_eq!(args.length(), 2);
   let arg1_val = v8::String::new(scope, "arg1").unwrap();
@@ -1351,10 +1352,10 @@ fn fn_callback2(
   rv.set(s.into());
 }
 
-fn fortytwo_callback(
-  scope: v8::FunctionCallbackScope,
-  _: v8::FunctionCallbackArguments,
-  mut rv: v8::ReturnValue,
+fn fortytwo_callback<'sc>(
+  scope: v8::FunctionCallbackScope<'sc>,
+  _: v8::FunctionCallbackArguments<'sc>,
+  mut rv: v8::ReturnValue<'sc>,
 ) {
   rv.set(v8::Integer::new(scope, 42).into());
 }
