@@ -38,6 +38,7 @@ extern "C" {
     isolate: *mut Isolate,
     index: u32,
   ) -> *mut StackFrame;
+  fn v8__StackTrace__CurrentStackTrace(isolate: *mut Isolate, frame_limit: int) -> *mut StackTrace;
 
   fn v8__StackFrame__GetLineNumber(self_: &StackFrame) -> int;
   fn v8__StackFrame__GetColumn(self_: &StackFrame) -> int;
@@ -82,6 +83,10 @@ impl StackTrace {
     unsafe {
       Local::from_raw(v8__StackTrace__GetFrame(self, isolate, index as u32))
     }
+  }
+
+  pub fn current_stack_trace<'sc>(scope: &mut impl ToLocal<'sc>, frame_limit: u32) -> Local<'sc, StackTrace> {
+    unsafe { Local::from_raw(v8__StackTrace__CurrentStackTrace(scope.isolate(), frame_limit as int)).unwrap() }
   }
 }
 

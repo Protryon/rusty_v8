@@ -1133,6 +1133,10 @@ v8::StackFrame* v8__StackTrace__GetFrame(v8::StackTrace& self,
   return local_to_ptr(self.GetFrame(isolate, index));
 }
 
+v8::StackTrace* v8__StackTrace__CurrentStackTrace(v8::Isolate* isolate, int frame_limit) {
+  return local_to_ptr(v8::StackTrace::CurrentStackTrace(isolate, frame_limit));
+}
+
 int v8__StackFrame__GetLineNumber(v8::StackFrame& self) {
   return self.GetLineNumber();
 }
